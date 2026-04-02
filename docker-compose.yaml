@@ -3,7 +3,7 @@ services:
   web:
     build: .
     ports:
-      - "5000:5000"
+      - "6000:6000"
     environment:
       FLASK_ENV: development
       OPENWEATHER_API_KEY: "${OPENWEATHER_API_KEY}"
