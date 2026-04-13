@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyCast | Modern Weather</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-clear: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            --bg-cloudy: linear-gradient(135deg, #94a3b8 0%, #475569 100%);
+            --bg-rainy: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+            --bg-snowy: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%);
+            --bg-default: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            transition: background 1s ease;
+            background: url('{{ url_for("static", filename="sky.jpg") }}') no-repeat center center fixed;
+            background-size: cover;
+            height: 100vh;
+            color: white;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('{{ url_for("static", filename="sky.jpg") }}') no-repeat center center fixed;
+            background-size: cover;
+            opacity: 0.3;
+            z-index: -1;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
+            z-index: -1;
+        }
+
+        .glass {
+            background: rgba(0, 0, 0, 0.35); /* Black Overlay */
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .search-input {
+            background: rgba(0, 0, 0, 0.25); /* Dark Input */
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .search-input:focus {
+            background: rgba(0, 0, 0, 0.4);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+        }
+
+        .fade-in {
+            animation: pureFadeIn 0.4s ease-out;
+        }
+
+        @keyframes pureFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .loader {
+            border-top-color: #ffffff;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .hidden-content {
+            display: none;
+        }
+
+        .app-container {
+            height: 100vh;
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            overflow: hidden;
+        }
+
+        /* Result Area Container */
+        #main-result-area {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Navbar -->
+        <header class="w-full flex justify-between items-center mb-4 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-black/30 rounded-xl border border-white/5">
+                    <i data-lucide="cloud-sun" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight leading-none text-white">SkyCast</h1>
+                    <span class="text-[8px] uppercase tracking-[0.2em] opacity-60 font-bold">Meteorology</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="current-time" class="hidden sm:block text-[10px] font-semibold opacity-80 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5"></div>
+                <button id="location-btn" class="p-2 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 active:scale-95">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="w-full max-lg mx-auto mb-6 shrink-0">
+            <form id="search-form" class="relative max-w-lg mx-auto">
+                <input type="text" id="city-input" 
+                    placeholder="Search city (e.g. Mumbai, Delhi)..." 
+                    class="search-input w-full py-4 pl-6 pr-14 rounded-2xl text-sm placeholder:text-white/40 text-white border border-white/10 shadow-lg"
+                    required>
+                <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-white text-teal-900 rounded-xl hover:bg-teal-50 transition-all shadow-md active:scale-95">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Result Section -->
+        <div id="main-result-area">
+            
+            <!-- Error Box -->
+            <div id="error-box" class="hidden max-w-md mx-auto w-full mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-center text-red-100 flex items-center justify-center gap-2 fade-in">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                <span id="error-message" class="text-[11px] font-medium"></span>
+            </div>
+
+            <!-- Initial Welcome Message -->
+            <div id="initial-state" class="flex-1 flex flex-col items-center justify-center text-center fade-in">
+                <div id="loader-wrapper" class="relative mb-5">
+                    <div id="search-icon-big">
+                        <i data-lucide="cloud-rain" class="w-16 h-16 opacity-10"></i>
+                    </div>
+                    <div id="loading-spinner" class="hidden absolute top-0 left-0 loader w-16 h-16 border-[4px] border-white/10 rounded-full"></div>
+                </div>
+                <h3 class="text-xl font-medium opacity-60 mb-1">Search results will appear here</h3>
+                <p class="opacity-40 text-[10px] font-medium uppercase tracking-widest">Type a city name to start</p>
+            </div>
+
+            <!-- Weather Information Result -->
+            <main id="weather-content" class="hidden-content h-full fade-in">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
+                    
+                    <!-- Main Card -->
+                    <div class="lg:col-span-8 glass rounded-[2rem] p-6 md:p-8 flex flex-col justify-between overflow-hidden">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="map-pin" class="w-4 h-4 opacity-50"></i>
+                                    <h2 id="display-city" class="text-2xl md:text-4xl font-bold">City Name</h2>
+                                </div>
+                                <p id="display-date" class="opacity-50 text-[10px] font-bold uppercase tracking-widest mt-1">Today</p>
+                            </div>
+                            <div id="weather-icon-main" class="p-4 bg-black/20 rounded-2xl shadow-inner border border-white/5">
+                                <!-- Icon Injected -->
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                            <div class="flex items-start">
+                                <span id="display-temp" class="text-7xl md:text-9xl font-light tracking-tighter leading-none">--°</span>
+                                <div class="mt-2 flex flex-col">
+                                    <span class="text-2xl font-light opacity-50">C</span>
+                                    <p id="display-desc" class="text-lg font-semibold opacity-90 capitalize">Condition</p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col gap-2 glass bg-black/20 border-white/5 p-4 rounded-2xl min-w-[170px]">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="thermometer" class="w-4 h-4 text-orange-300"></i>
+                                    <span id="display-high-low" class="text-xs font-bold tracking-tight">H: --° L: --°</span>
+                                </div>
+                                <div class="h-[1px] bg-white/10 w-full"></div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="user" class="w-4 h-4 text-cyan-300"></i>
+                                    <span class="text-[10px] font-medium opacity-70">Feels <b id="display-feels" class="text-white">--°</b></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Side Stats -->
+                    <div class="lg:col-span-4 grid grid-cols-1 gap-3">
+                        <div class="glass rounded-2xl p-4 flex items-center gap-4 border-white/5">
+                            <div class="p-3 bg-cyan-500/20 rounded-xl">
+                                <i data-lucide="droplets" class="text-cyan-300 w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-[9px] opacity-50 font-bold uppercase tracking-wider">Humidity</p>
+                                <p id="stat-humidity" class="text-xl font-extrabold">--%</p>
+                            </div>
+                        </div>
+                        <div class="glass rounded-2xl p-4 flex items-center gap-4 border-white/5">
+                            <div class="p-3 bg-emerald-500/20 rounded-xl">
+                                <i data-lucide="wind" class="text-emerald-300 w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-[9px] opacity-50 font-bold uppercase tracking-wider">Wind</p>
+                                <p id="stat-wind" class="text-xl font-extrabold">-- km/h</p>
+                            </div>
+                        </div>
+                        <div class="glass rounded-2xl p-4 flex items-center gap-4 border-white/5">
+                            <div class="p-3 bg-yellow-500/20 rounded-xl">
+                                <i data-lucide="sun" class="text-yellow-300 w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-[9px] opacity-50 font-bold uppercase tracking-wider">UV Index</p>
+                                <p id="stat-uv" class="text-xl font-extrabold">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Forecast -->
+                    <div class="lg:col-span-12 glass rounded-[2rem] p-5 border-white/5">
+                        <h3 class="text-xs font-bold flex items-center gap-2 uppercase tracking-wider opacity-80 mb-3">
+                            <i data-lucide="calendar-range" class="w-4 h-4 text-emerald-300"></i>
+                            Weekly Forecast
+                        </h3>
+                        <div id="forecast-container" class="flex overflow-x-auto pb-1 gap-3 no-scrollbar">
+                            <!-- Injected -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        const form = document.getElementById('search-form');
+        const cityInput = document.getElementById('city-input');
+        const weatherContent = document.getElementById('weather-content');
+        const initialState = document.getElementById('initial-state');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const searchIcon = document.getElementById('search-icon-big');
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+        const locationBtn = document.getElementById('location-btn');
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        const weatherCodes = {
+            0: { desc: "Clear sky", icon: "sun", bg: "var(--bg-clear)" },
+            1: { desc: "Mainly clear", icon: "sun", bg: "var(--bg-clear)" },
+            2: { desc: "Partly cloudy", icon: "cloud-sun", bg: "var(--bg-cloudy)" },
+            3: { desc: "Overcast", icon: "cloud", bg: "var(--bg-cloudy)" },
+            45: { desc: "Fog", icon: "cloud", bg: "var(--bg-cloudy)" },
+            51: { desc: "Light drizzle", icon: "cloud-drizzle", bg: "var(--bg-rainy)" },
+            61: { desc: "Rain", icon: "cloud-rain", bg: "var(--bg-rainy)" },
+            71: { desc: "Snow", icon: "snowflake", bg: "var(--bg-snowy)" },
+            95: { desc: "Thunderstorm", icon: "cloud-lightning", bg: "var(--bg-rainy)" }
+        };
+
+        function getWeatherInfo(code) {
+            return weatherCodes[code] || { desc: "Unknown", icon: "cloud", bg: "var(--bg-default)" };
+        }
+
+        async function fetchWeather(lat, lon, cityName, countryName) {
+            showLoading(true);
+            errorBox.classList.add('hidden');
+            try {
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`);
+                const weatherData = await weatherRes.json();
+                updateUI(cityName, countryName, weatherData);
+            } catch (err) {
+                showError("Weather data nahi mil raha.");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const city = cityInput.value.trim();
+            if (!city) return;
+
+            showLoading(true);
+            errorBox.classList.add('hidden');
+
+            try {
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`);
+                const geoData = await geoRes.json();
+
+                if (!geoData.results || geoData.results.length === 0) {
+                    throw new Error("City nahi mili. Dobara check karein.");
+                }
+
+                const { latitude, longitude, name, country } = geoData.results[0];
+                await fetchWeather(latitude, longitude, name, country);
+            } catch (error) {
+                showError(error.message);
+                showLoading(false);
+            }
+        });
+
+        locationBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) return;
+            showLoading(true);
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                await fetchWeather(latitude, longitude, "My Location", "");
+            }, () => {
+                showError("Location access denied.");
+                showLoading(false);
+            });
+        });
+
+        function showLoading(isLoading) {
+            if (isLoading) {
+                loadingSpinner.classList.remove('hidden');
+                searchIcon.classList.add('opacity-0');
+            } else {
+                loadingSpinner.classList.add('hidden');
+                searchIcon.classList.remove('opacity-0');
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorBox.classList.remove('hidden');
+            weatherContent.classList.add('hidden-content');
+            initialState.classList.remove('hidden');
+        }
+
+        function updateUI(city, country, data) {
+            const current = data.current;
+            const info = getWeatherInfo(current.weather_code);
+
+            document.body.style.background = info.bg;
+            document.getElementById('display-city').textContent = city;
+            document.getElementById('display-date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            
+            const iconContainer = document.getElementById('weather-icon-main');
+            iconContainer.innerHTML = `<i data-lucide="${info.icon}" class="w-10 h-10 md:w-14 md:h-14 text-white"></i>`;
+            
+            document.getElementById('display-temp').textContent = `${Math.round(current.temperature_2m)}°`;
+            document.getElementById('display-desc').textContent = info.desc;
+            document.getElementById('display-high-low').textContent = `H: ${Math.round(data.daily.temperature_2m_max[0])}° L: ${Math.round(data.daily.temperature_2m_min[0])}°`;
+            document.getElementById('display-feels').textContent = `${Math.round(current.apparent_temperature)}°`;
+            
+            document.getElementById('stat-humidity').textContent = `${current.relative_humidity_2m}%`;
+            document.getElementById('stat-wind').textContent = `${current.wind_speed_10m} km/h`;
+            document.getElementById('stat-uv').textContent = data.daily.uv_index_max[0];
+
+            const forecastContainer = document.getElementById('forecast-container');
+            forecastContainer.innerHTML = '';
+            
+            for(let i = 1; i < 8; i++) {
+                const dayDate = new Date(data.daily.time[i]);
+                const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
+                const dayInfo = getWeatherInfo(data.daily.weather_code[i]);
+                const high = Math.round(data.daily.temperature_2m_max[i]);
+                const low = Math.round(data.daily.temperature_2m_min[i]);
+
+                const dayEl = document.createElement('div');
+                dayEl.className = 'flex-shrink-0 flex flex-col items-center gap-3 min-w-[95px] p-4 glass bg-black/30 border-none rounded-2xl hover:bg-black/40 transition-all cursor-default';
+                dayEl.innerHTML = `
+                    <span class="font-bold opacity-40 uppercase text-[9px] tracking-widest text-white">${dayName}</span>
+                    <i data-lucide="${dayInfo.icon}" class="w-6 h-6 text-white"></i>
+                    <div class="flex flex-col items-center">
+                        <span class="font-bold text-base tracking-tight text-white">${high}°</span>
+                        <span class="opacity-40 font-bold text-[10px] text-white">${low}°</span>
+                    </div>
+                `;
+                forecastContainer.appendChild(dayEl);
+            }
+
+            lucide.createIcons();
+            initialState.classList.add('hidden');
+            weatherContent.classList.remove('hidden-content');
+        }
+    </script>
+</body>
+</html>

@@ -1,15 +1,15 @@
 ﻿import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
-OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '').strip()
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
 
 
 def fetch_weather(city: str):
     if not OPENWEATHER_API_KEY:
-        return None, "Missing OPENWEATHER_API_KEY environment variable."
+        return None, "Missing OPENWEATHER_API_KEY environment variable. Set OPENWEATHER_API_KEY in your environment."
 
     url = 'https://api.openweathermap.org/data/2.5/weather'
     params = {
@@ -66,10 +66,19 @@ def weather_city(city):
     return jsonify(weather)
 
 
-@app.route('/')
-def hello_world():
-    return jsonify({'message': 'Weather app is running', 'usage': '/weather?city=<city>'})
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    weather_data = None
+    error_message = None
+    city = ''
+
+    if request.method == 'POST':
+        city = request.form.get('city', '').strip()
+        if city:
+            weather_data, error_message = fetch_weather(city)
+
+    return render_template('index.html', weather=weather_data, error=error_message, city=city)
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 3000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
